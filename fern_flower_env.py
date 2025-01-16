@@ -59,7 +59,6 @@ class FernFlowerEnv(gym.Env):
         self.observation_space = spaces.Box(low=0, high=255, shape=self.ai_ss_shape, dtype=np.uint8)
         self.done = False
 
-
     def take_screenshot(self):
         screenshot = pyautogui.screenshot()
         width, height = screenshot.size
@@ -221,13 +220,11 @@ class FernFlowerEnv(gym.Env):
     def close(self):
         pass
 
-if __name__ == "__main__":
-    env = FernFlowerEnv("base_images/close_button_bin.png", "base_images/play_button_bin.png", 2)
-    check_env(env)
-    env.reset()
-    models_dir = "models/PPO"
-    logdir = "logs"
 
+def train_env(env): 
+    env.reset()
+    models_dir = "models/PPOv2"
+    logdir = "logs"
     if not os.path.exists(models_dir):
         os.makedirs(models_dir)
 
@@ -237,8 +234,31 @@ if __name__ == "__main__":
     model = PPO('CnnPolicy', env, verbose=1, tensorboard_log=logdir)
 
     TIMESTEPS = 1000
-    iters = 0
     for i in range(30):
         model.learn(total_timesteps=TIMESTEPS, reset_num_timesteps=False, tb_log_name="PPO")
         model.save(f"{models_dir}/{TIMESTEPS*i}")
-    
+
+def evaluate_model(env, model, episodes=10):
+    env.reset()
+    for episode in range(episodes):
+        obs, _dct = env.reset()
+        terminated = False
+        total_reward = 0
+
+        while not terminated:
+            action, _states = model.predict(obs)
+            obs, reward, terminated, truncated, info = env.step(int(action))
+            total_reward += reward
+
+        print(f"Episode {episode + 1}: Total reward: {total_reward} Result: {info['result']}")
+
+    env.close()
+
+
+if __name__ == "__main__":
+    env = FernFlowerEnv("base_images/close_button_bin.png", "base_images/play_button_bin.png", 2)
+    # check_env(env)
+    # train_env(env)
+    model_path = "models/PPO/29000"
+    model = PPO.load(model_path, env)
+    evaluate_model(env, model, 3)
