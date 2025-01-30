@@ -132,6 +132,8 @@ class FernFlowerEnv(gym.Env):
 
         if self.screenshots_wo_change >= self.stuck_game_threshold:
             time.sleep(2 * self.reload_gui_time_buffer) # let it die
+            self.screenshots_wo_change = 0 # to avoid stucking on ground landing on lower results (15 or below)
+            self.curr_result_img = np.zeros((45, 120))
 
     def jump_in_background(self, direction, time_code):
         thread = threading.Thread(target=self.jump, args=(direction, time_code))
@@ -198,7 +200,7 @@ class FernFlowerEnv(gym.Env):
         is_game_end, result_changed, result = result_container[0]
         observation = self.last_ai_ss
         reward = 1 if result_changed else 0
-        reward += 0 if result<=100 else int(((result-100)**2)/10000)
+        reward += 0 if result <=100 else int(((result-100)**2)/10000)
         self.done = is_game_end
         terminated = is_game_end
         truncated = False
@@ -208,6 +210,7 @@ class FernFlowerEnv(gym.Env):
         self.done = False
         self.result_changes = 0
         self.screenshots_wo_change = 0
+        self.curr_result_img = np.zeros((45, 120))
         initial_observation = np.expand_dims(np.array(self.take_screenshot().resize(self.ai_ss_size)).astype('uint8'), axis=0)
         self.click(self.play_button_position)
         return initial_observation, {}
@@ -221,9 +224,9 @@ class FernFlowerEnv(gym.Env):
         pass
 
 
-def train_env(env): 
+def train_env(env, model_path=None, model_first_step=0, model_last_step=30): 
     env.reset()
-    models_dir = "models/PPOv2"
+    models_dir = "models/PPO"
     logdir = "logs"
     if not os.path.exists(models_dir):
         os.makedirs(models_dir)
@@ -231,15 +234,24 @@ def train_env(env):
     if not os.path.exists(logdir):
         os.makedirs(logdir)
 
-    model = PPO('CnnPolicy', env, verbose=1, tensorboard_log=logdir)
+    if not model_path:
+        model = PPO('CnnPolicy', env, verbose=1, tensorboard_log=logdir)
+        model_first_step = 0
+    else: 
+        model = PPO.load(model_path, env=env)
 
     TIMESTEPS = 1000
-    for i in range(30):
+    for i in range(model_first_step, model_last_step):
         model.learn(total_timesteps=TIMESTEPS, reset_num_timesteps=False, tb_log_name="PPO")
         model.save(f"{models_dir}/{TIMESTEPS*i}")
 
-def evaluate_model(env, model, episodes=10):
+
+def evaluate_model(env, model_path, episodes=10):
+    model = PPO.load(model_path, env)
     env.reset()
+    cumulated_results = 0
+    cumulated_rewards = 0
+
     for episode in range(episodes):
         obs, _dct = env.reset()
         terminated = False
@@ -249,16 +261,33 @@ def evaluate_model(env, model, episodes=10):
             action, _states = model.predict(obs)
             obs, reward, terminated, truncated, info = env.step(int(action))
             total_reward += reward
-
-        print(f"Episode {episode + 1}: Total reward: {total_reward} Result: {info['result']}")
+            
+        episode_result = info['result']
+        print(f"Episode: {episode + 1} Total reward: {total_reward} Result: {episode_result}")
+        cumulated_rewards += total_reward
+        cumulated_results += episode_result
 
     env.close()
+    mean_reward = cumulated_rewards/episode
+    mean_result = cumulated_results/episode
+    return mean_reward, mean_result
+
+
+def test_and_evaluate(env, episodes=100, filename='evalutaion.txt'):
+    for iter_log in range(55000, 61000, 1000):
+        model_path = f"models/PPO/{str(iter_log)}"
+        mean_reward, mean_result = evaluate_model(env, model_path, episodes)
+        result_arr = [str(txt) for txt in [episodes, model_path, mean_reward, mean_result]]
+        result_str = ','.join(result_arr) + '\n'
+        with open(filename, "a") as file:
+            file.write(result_str)
 
 
 if __name__ == "__main__":
     env = FernFlowerEnv("base_images/close_button_bin.png", "base_images/play_button_bin.png", 2)
     # check_env(env)
-    # train_env(env)
-    model_path = "models/PPO/29000"
-    model = PPO.load(model_path, env)
-    evaluate_model(env, model, 3)
+    model_path = "models/PPO/55000"
+    # mean_reward, mean_result = evaluate_model(env, model_path, 5)
+    # print(f"Mean reward: {mean_reward} Mean result: {mean_result}")
+    test_and_evaluate(env, episodes=10, filename="test_eval_55_60.txt")
+    # train_env(env, model_path, 47, 100)
