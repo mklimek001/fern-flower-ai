@@ -251,6 +251,7 @@ def evaluate_model(env, model_path, episodes=10):
     env.reset()
     cumulated_results = 0
     cumulated_rewards = 0
+    max_result = 0
 
     for episode in range(episodes):
         obs, _dct = env.reset()
@@ -266,18 +267,19 @@ def evaluate_model(env, model_path, episodes=10):
         print(f"Episode: {episode + 1} Total reward: {total_reward} Result: {episode_result}")
         cumulated_rewards += total_reward
         cumulated_results += episode_result
+        max_result = max(max_result, episode_result)
 
     env.close()
     mean_reward = cumulated_rewards/episode
     mean_result = cumulated_results/episode
-    return mean_reward, mean_result
+    return mean_reward, mean_result, max_result
 
 
 def test_and_evaluate(env, episodes=100, filename='evalutaion.txt'):
-    for iter_log in range(55000, 61000, 1000):
+    for iter_log in range(55000, 58000, 1000):
         model_path = f"models/PPO/{str(iter_log)}"
-        mean_reward, mean_result = evaluate_model(env, model_path, episodes)
-        result_arr = [str(txt) for txt in [episodes, model_path, mean_reward, mean_result]]
+        mean_reward, mean_result, max_result = evaluate_model(env, model_path, episodes)
+        result_arr = [str(txt) for txt in [episodes, model_path, mean_reward, mean_result, max_result]]
         result_str = ','.join(result_arr) + '\n'
         with open(filename, "a") as file:
             file.write(result_str)
@@ -289,5 +291,5 @@ if __name__ == "__main__":
     model_path = "models/PPO/55000"
     # mean_reward, mean_result = evaluate_model(env, model_path, 5)
     # print(f"Mean reward: {mean_reward} Mean result: {mean_result}")
-    test_and_evaluate(env, episodes=10, filename="test_eval_55_60.txt")
+    test_and_evaluate(env, episodes=50, filename="evalutaion_v1.txt")
     # train_env(env, model_path, 47, 100)

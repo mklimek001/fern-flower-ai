@@ -222,6 +222,7 @@ def evaluate_model(env, model_path, episodes=10):
     env.reset()
     cumulated_results = 0
     cumulated_rewards = 0
+    max_result = 0
 
     for episode in range(episodes):
         obs, _dct = env.reset()
@@ -237,14 +238,26 @@ def evaluate_model(env, model_path, episodes=10):
         print(f"Episode: {episode + 1} Total reward: {total_reward} Result: {episode_result}")
         cumulated_rewards += total_reward
         cumulated_results += episode_result
+        max_result = max(max_result, episode_result)
 
     env.close()
     mean_reward = cumulated_rewards/episode
     mean_result = cumulated_results/episode
-    return mean_reward, mean_result
+    return mean_reward, mean_result, max_result
+
+
+def test_and_evaluate(env, start_range, end_range, episodes=100, filename='evalutaion.txt'):
+    for iter_log in range(start_range, end_range, 1000):
+        model_path = f"models/PPOv3/{str(iter_log)}"
+        mean_reward, mean_result, max_result = evaluate_model(env, model_path, episodes)
+        result_arr = [str(txt) for txt in [episodes, model_path, mean_reward, mean_result, max_result]]
+        result_str = ','.join(result_arr) + '\n'
+        with open(filename, "a") as file:
+            file.write(result_str)
 
 
 if __name__ == "__main__":
     env = FernFlowerEnv3("base_images/close_button_bin_v3.png", "base_images/play_button_bin_v3.png", 2)
     check_env(env)
-    train_env(env, None, 0, 60)
+    # train_env(env, None, 0, 60)
+    test_and_evaluate(env, 49000, 52000, episodes=50, filename="evalutaion_v3.txt")
